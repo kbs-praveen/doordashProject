@@ -6,24 +6,14 @@ from selenium.webdriver.common.by import By
 from seleniumbase import Driver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from datetime import datetime
 
 # Set up logging to console
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-restaurant_detail = {}
-all_items_details = []
-clicked_items = set()
+
 def extract_store_header(storepage_feed):
     return storepage_feed.get('storeHeader', {})
 
-
-def convert_to_24hr(time_str):
-    try:
-        # Convert 12-hour format to 24-hour format
-        return datetime.strptime(time_str, '%I:%M %p').strftime('%H:%M')
-    except ValueError:
-        return time_str  # If conversion fails, return original time string
 
 def extract_store_hours(mx_info):
     store_hours_info = mx_info.get('operationInfo', {}).get('storeOperationHourInfo', {}).get('operationSchedule', [])
@@ -32,14 +22,7 @@ def extract_store_hours(mx_info):
         day = day_info.get('dayOfWeek', '').capitalize()
         time_slots = day_info.get('timeSlotList', [])
         for time_slot in time_slots:
-            # Split time slots into start and end times
-            try:
-                start_time, end_time = time_slot.split(' - ')
-                start_time = convert_to_24hr(start_time)
-                end_time = convert_to_24hr(end_time)
-                store_opening_hours.append(f"{day} {start_time}-{end_time}")
-            except ValueError:
-                store_opening_hours.append(f"{day} {time_slot}")  # If split fails, append original time slot
+            store_opening_hours.append(f"{day} {time_slot}")
     return store_opening_hours
 
 
@@ -47,25 +30,6 @@ def extract_menu_groups(menu_book):
     menu_categories = menu_book.get('menuCategories', [])
     return [category.get('name') for category in menu_categories]
 
-
-def transform_item_lists(item_lists):
-    transformed_categories = []
-    for item_list in item_lists:
-        category = {
-            "title": item_list.get('name'),
-            "menu": []
-        }
-        for item in item_list.get('items', []):
-            menu_item = {
-                "name": item.get('name'),
-                "description": item.get('description'),
-                "imageUrl": item.get('imageUrl'),
-                "price": int(float(item.get('displayPrice', '$0.00').replace('$', '').replace(',', '')) * 100),
-                "ingredientsGroups": []  # Add more details if available
-            }
-            category["menu"].append(menu_item)
-        transformed_categories.append(category)
-    return transformed_categories
 
 #def transform_item_lists(item_lists):
 #    transformed_categories = []
@@ -79,12 +43,31 @@ def transform_item_lists(item_lists):
 #                "name": item.get('name'),
 #                "description": item.get('description'),
 #                "imageUrl": item.get('imageUrl'),
-#                "price": float(item.get('displayPrice', '$0.00').replace('$', '').replace(',', '')),  # Keep price as a float
+#                "price": int(float(item.get('displayPrice', '$0.00').replace('$', '').replace(',', '')) * 100),
 #                "ingredientsGroups": []  # Add more details if available
 #            }
 #            category["menu"].append(menu_item)
 #        transformed_categories.append(category)
 #    return transformed_categories
+
+def transform_item_lists(item_lists):
+    transformed_categories = []
+    for item_list in item_lists:
+        category = {
+            "title": item_list.get('name'),
+            "menu": []
+        }
+        for item in item_list.get('items', []):
+            menu_item = {
+                "name": item.get('name'),
+                "description": item.get('description'),
+                "imageUrl": item.get('imageUrl'),
+                "price": float(item.get('displayPrice', '$0.00').replace('$', '').replace(',', '')),  # Keep price as a float
+                "ingredientsGroups": []  # Add more details if available
+            }
+            category["menu"].append(menu_item)
+        transformed_categories.append(category)
+    return transformed_categories
 
 
 
@@ -96,13 +79,12 @@ def compile_restaurant_data(store_header, mx_info, store_opening_hours, menu_gro
     postal_code = postal_code_match.group(0) if postal_code_match else ''
     return {
         'data': {
-#            "menu_id": store_header.get('id'),
-            'menu_id': 18344,
+            "menu_id": store_header.get('id'),
             'titleURL': '',
             'title_id': '',
             'title': store_header.get('name'),
-            'ImageURL': store_header.get('businessHeaderImgUrl'),
-            'LogoURL': store_header.get('coverSquareImgUrl'),
+            'images': store_header.get('coverSquareImgUrl'),
+            'LogoURL': store_header.get('businessHeaderImgUrl'),
             'restaurantAddress': {
                 '@type': mx_info.get('address', {}).get('__typename'),
                 'streetAddress': mx_info.get('address', {}).get('street'),
@@ -116,8 +98,8 @@ def compile_restaurant_data(store_header, mx_info, store_opening_hours, menu_gro
             'telephone': mx_info.get('phoneno'),
             'ratingValue': '',
             'ratingCount': '',
-            'latitude': float(store_header.get('address', {}).get('lat', 0.0)),
-            'longitude': float(store_header.get('address', {}).get('lng', 0.0)),
+            'latitude': store_header.get('address', {}).get('lat'),
+            'longitude': store_header.get('address', {}).get('lng'),
             'cuisine': '',
             'menu_groups': menu_groups,
             'categories': transformed_categories
@@ -184,6 +166,18 @@ def save_json_to_file(data, filename='restaurant_detail.json'):
     with open(filename, 'w') as outfile:
         json.dump(data, outfile, indent=4)
 
+
+def click_tab(driver, tab):
+    """Click the tab and wait for the items to load."""
+    try:
+        logging.info(f"Clicking tab: {tab.get_attribute('aria-label')}")
+        tab.click()
+        time.sleep(5)
+        WebDriverWait(driver, 60).until(
+            EC.presence_of_element_located((By.XPATH, '//div[@data-testid="MenuItem"]'))
+        )
+    except Exception as e:
+        logging.error(f"Error clicking tab: {e}")
 
 
 def click_item(driver, item):
@@ -287,6 +281,10 @@ def click_item(driver, item):
         time.sleep(2)
 
 
+
+
+
+
 def append_item_details_to_menu(menu, item_details):
     if not item_details:
         return menu
@@ -319,6 +317,10 @@ def main():
     url = "https://www.doordash.com/store/flintridge-pizza-kitchen-la-ca%C3%B1ada-flintridge-26137758/?event_type=autocomplete&pickup=false"
     driver.get(url)
     time.sleep(50)  # Adjust the sleep time based on how long the page takes to load
+
+    # Initialize global variables
+    all_items_details = []
+    clicked_items = set()
 
     # Parse and save restaurant data
     restaurant_detail = parse_store_data(driver)
