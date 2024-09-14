@@ -51,21 +51,53 @@ def extract_menu_groups(menu_book):
 def transform_item_lists(item_lists):
     transformed_categories = []
     for item_list in item_lists:
+        # Safely get the category name
         category = {
-            "title": item_list.get('name'),
+            "title": item_list.get('name', 'Unknown Category'),
             "menu": []
         }
+
         for item in item_list.get('items', []):
+            # Safely retrieve price and handle non-numeric values
+            try:
+                price_str = item.get('displayPrice', '$0.00').replace('$', '').replace(',', '')
+                price = int(float(price_str) * 100)
+            except ValueError:
+                price = 0  # Fallback if the price can't be converted
+
+            # Build the menu item with safe default values
             menu_item = {
-                "name": item.get('name'),
-                "description": item.get('description'),
-                "imageUrl": item.get('imageUrl'),
-                "price": int(float(item.get('displayPrice', '$0.00').replace('$', '').replace(',', '')) * 100),
+                "name": item.get('name', 'Unnamed Item'),
+                "description": item.get('description', ''),
+                "imageUrl": item.get('imageUrl', ''),
+                "price": price,
                 "ingredientsGroups": []  # Add more details if available
             }
             category["menu"].append(menu_item)
+
         transformed_categories.append(category)
+
     return transformed_categories
+
+
+#def transform_item_lists(item_lists):
+#    transformed_categories = []
+#    for item_list in item_lists:
+#        category = {
+#            "title": item_list.get('name'),
+#            "menu": []
+#        }
+#        for item in item_list.get('items', []):
+#            menu_item = {
+#                "name": item.get('name'),
+#                "description": item.get('description'),
+#                "imageUrl": item.get('imageUrl'),
+#                "price": int(float(item.get('displayPrice', '$0.00').replace('$', '').replace(',', '')) * 100),
+#                "ingredientsGroups": []  # Add more details if available
+#            }
+#            category["menu"].append(menu_item)
+#        transformed_categories.append(category)
+#    return transformed_categories
 
 #def transform_item_lists(item_lists):
 #    transformed_categories = []
@@ -112,7 +144,7 @@ def compile_restaurant_data(store_header, mx_info, store_opening_hours, menu_gro
                 'addressCountry': mx_info.get('address', {}).get('countryShortname'),
             },
             'storeOpeningHours': store_opening_hours,
-            'priceRange': store_header.get('priceRange'),
+            'priceRange': store_header.get('priceRangeDisplayString'),
             'telephone': mx_info.get('phoneno'),
             'ratingValue': '',
             'ratingCount': '',
@@ -212,9 +244,12 @@ def click_item(driver, item):
 
             # Extract details similar to salad choices
             details_elements = driver.find_elements(By.CSS_SELECTOR, 'div[role="group"]')
+            logging.info(f"details_elements: {details_elements}")
             for detail in details_elements:
-                detail_name = detail.find_element(By.CSS_SELECTOR, 'h3.Text-sc-1nm69d8-0').text
+                detail_name = detail.find_element(By.CSS_SELECTOR, 'h3.Text-sc-1nm69d8-0.hBnZXN').text
+                logging.info(f"detail_name: {detail_name}")
                 select_spans = detail.find_elements(By.CSS_SELECTOR, 'span.Text-sc-1nm69d8-0.gFJzBa')
+                logging.info(f"select_spans: {select_spans}")
                 if len(select_spans) > 1:
                     select_value_text = select_spans[1].text.strip()
                     select_value = re.sub(r'[^0-9]', '', select_value_text)
@@ -227,12 +262,16 @@ def click_item(driver, item):
 
                 options = []
                 option_elements = detail.find_elements(By.CSS_SELECTOR, 'label')
+                logging.info(f"option_elements: {option_elements}")
                 for option in option_elements:
                     option_name = option.find_element(By.CSS_SELECTOR, 'span.Text-sc-1nm69d8-0').text
+                    logging.info(f"option_name: {option_name}")
                     price_elements = option.find_elements(By.CSS_SELECTOR, 'span.Text-sc-1nm69d8-0.dCneXH')
+                    logging.info(f"price_elements: {price_elements}")
                     if price_elements:
                         raw_price = price_elements[0].text
-                        cleaned_price = float(raw_price.replace('+', '').replace('$', '').strip())
+                        # Remove 'US', '+', and '$', then strip any extra spaces
+                        cleaned_price = float(raw_price.replace('US', '').replace('+', '').replace('$', '').strip())
                     else:
                         cleaned_price = 0
                     price = cleaned_price * 2
@@ -262,6 +301,8 @@ def click_item(driver, item):
 
             # Close the modal and handle any issues with closing
             close_button = driver.find_element(By.CSS_SELECTOR, 'button[aria-label^="Close"]')
+            logging.info(f"close_button: {close_button}")
+
             close_button.click()
             logging.info("Close button clicked")
 
@@ -273,8 +314,8 @@ def click_item(driver, item):
             time.sleep(5)
 
             # Scroll down to load more items after clicking the item
-            driver.execute_script("window.scrollBy(0, 100);")
-            time.sleep(2)
+#            driver.execute_script("window.scrollBy(0, 100);")
+#            time.sleep(2)
             # Update the global menu with the item details
             global restaurant_detail
             if restaurant_detail:
@@ -316,13 +357,14 @@ def main():
     driver = Driver(uc=True, undetectable=True)
     driver.set_window_size(1024, 1024)  # Example for an iPad in portrait mode
 
-    url = "https://www.doordash.com/store/flintridge-pizza-kitchen-la-ca%C3%B1ada-flintridge-26137758/?event_type=autocomplete&pickup=false"
+    url = "https://www.doordash.com/store/samara-pizza-syracuse-843307/?event_type=autocomplete&pickup=false"
     driver.get(url)
     time.sleep(50)  # Adjust the sleep time based on how long the page takes to load
 
     # Parse and save restaurant data
-    restaurant_detail = parse_store_data(driver)
+    restaurant_detail = parse_store_data(driver) #menu_id
     save_json_to_file(restaurant_detail)
+    #  data -
     logging.info(f"Restaurant data: {restaurant_detail}")
 
     # Scroll and fetch items
@@ -345,7 +387,7 @@ def main():
             click_item(driver, item)
 
         # Scroll and check if new items are loaded
-        driver.execute_script("window.scrollBy(0, 85);")
+        driver.execute_script("window.scrollBy(0, 100);")
         time.sleep(2)
         items = driver.find_elements(By.XPATH, items_xpath)
 
