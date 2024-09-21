@@ -423,7 +423,7 @@ def main():
     driver = Driver(uc=True, undetectable=True)
     driver.set_window_size(1024, 1024)  # Example for an iPad in portrait mode
 
-    url = "https://www.doordash.com/en-CA/store/blue-line-pizza-mountain-view-45/?utm_campaign=gpa"
+    url = "https://www.doordash.com/store/figlio-columbus-39968/"
     driver.get(url)
     time.sleep(50)  # Adjust the sleep time based on how long the page takes to load
 
