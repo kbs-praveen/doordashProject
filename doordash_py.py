@@ -7,6 +7,7 @@ from seleniumbase import Driver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from datetime import datetime
+from re import search
 
 # Set up logging to console
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -24,6 +25,31 @@ def convert_to_24hr(time_str):
         return datetime.strptime(time_str, '%I:%M %p').strftime('%H:%M')
     except ValueError:
         return time_str  # If conversion fails, return original time string
+
+#def extract_store_hours(mx_info):
+#    store_hours_info = mx_info.get('operationInfo', {}).get('storeOperationHourInfo', {}).get('operationSchedule', [])
+#    store_opening_hours = []
+#    for day_info in store_hours_info:
+#        day = day_info.get('dayOfWeek', '').capitalize()
+#        time_slots = day_info.get('timeSlotList', [])
+#        for time_slot in time_slots:
+#            # Split time slots into start and end times
+#            try:
+#                start_time, end_time = time_slot.split(' - ')
+#                start_time = convert_to_24hr(start_time)
+#                end_time = convert_to_24hr(end_time)
+#                store_opening_hours.append(f"{day} {start_time}-{end_time}")
+#            except ValueError:
+#                store_opening_hours.append(f"{day} {time_slot}")  # If split fails, append original time slot
+#    return store_opening_hours
+
+def convert_to_24hr(time_str):
+    # Helper function to convert time to 24-hour format
+    from datetime import datetime
+    try:
+        return datetime.strptime(time_str, "%I %p").strftime("%H:%M")
+    except ValueError:
+        return datetime.strptime(time_str, "%I:%M %p").strftime("%H:%M")
 
 def extract_store_hours(mx_info):
     store_hours_info = mx_info.get('operationInfo', {}).get('storeOperationHourInfo', {}).get('operationSchedule', [])
@@ -43,41 +69,42 @@ def extract_store_hours(mx_info):
     return store_opening_hours
 
 
+
 def extract_menu_groups(menu_book):
     menu_categories = menu_book.get('menuCategories', [])
     return [category.get('name') for category in menu_categories]
 
 
-def transform_item_lists(item_lists):
-    transformed_categories = []
-    for item_list in item_lists:
-        # Safely get the category name
-        category = {
-            "title": item_list.get('name', 'Unknown Category'),
-            "menu": []
-        }
-
-        for item in item_list.get('items', []):
-            # Safely retrieve price and handle non-numeric values
-            try:
-                price_str = item.get('displayPrice', '$0.00').replace('$', '').replace(',', '')
-                price = int(float(price_str) * 100)
-            except ValueError:
-                price = 0  # Fallback if the price can't be converted
-
+#def transform_item_lists(item_lists):
+#    transformed_categories = []
+#    for item_list in item_lists:
+#        # Safely get the category name
+#        category = {
+#            "title": item_list.get('name', 'Unknown Category'),
+#            "menu": []
+#        }
+#
+#        for item in item_list.get('items', []):
+#            # Safely retrieve price and handle non-numeric values
+#            try:
+#                price_str = item.get('displayPrice', '$0.00').replace('$', '').replace(',', '')
+#                price = int(float(price_str) * 100)
+#            except ValueError:
+#                price = 0  # Fallback if the price can't be converted
+#
             # Build the menu item with safe default values
-            menu_item = {
-                "name": item.get('name', 'Unnamed Item'),
-                "description": item.get('description', ''),
-                "imageUrl": item.get('imageUrl', ''),
-                "price": price,
-                "ingredientsGroups": []  # Add more details if available
-            }
-            category["menu"].append(menu_item)
+#            menu_item = {
+#                "name": item.get('name', 'Unnamed Item'),
+#                "description": item.get('description', ''),
+#                "imageUrl": item.get('imageUrl', ''),
+#                "price": price,
+#                "ingredientsGroups": []  # Add more details if available
+#            }
+#            category["menu"].append(menu_item)
 
-        transformed_categories.append(category)
+#        transformed_categories.append(category)
 
-    return transformed_categories
+#    return transformed_categories
 
 
 #def transform_item_lists(item_lists):
@@ -99,24 +126,32 @@ def transform_item_lists(item_lists):
 #        transformed_categories.append(category)
 #    return transformed_categories
 
-#def transform_item_lists(item_lists):
-#    transformed_categories = []
-#    for item_list in item_lists:
-#        category = {
-#            "title": item_list.get('name'),
-#            "menu": []
-#        }
-#        for item in item_list.get('items', []):
-#            menu_item = {
-#                "name": item.get('name'),
-#                "description": item.get('description'),
-#                "imageUrl": item.get('imageUrl'),
-#                "price": float(item.get('displayPrice', '$0.00').replace('$', '').replace(',', '')),  # Keep price as a float
-#                "ingredientsGroups": []  # Add more details if available
-#            }
-#            category["menu"].append(menu_item)
-#        transformed_categories.append(category)
-#    return transformed_categories
+def transform_item_lists(item_lists):
+    transformed_categories = []
+    for item_list in item_lists:
+        category = {
+            "title": item_list.get('name', 'Unknown Category'),
+            "menu": []
+        }
+        for item in item_list.get('items', []):
+            try:
+                price_str = item.get('displayPrice', '$0.00').replace('$', '').replace(',', '')
+                price = float(price_str)
+            except ValueError:
+                print(f"Warning: Unable to convert price '{price_str}' to float.")
+                price = 0.0  # Default value or handle as needed
+
+            menu_item = {
+                "name": item.get('name', 'Unnamed Item'),
+                "description": item.get('description', 'No Description'),
+                "imageUrl": item.get('imageUrl', 'No Image URL'),
+                "price": price,
+                "ingredientsGroups": []  # Add more details if available
+            }
+            category["menu"].append(menu_item)
+        transformed_categories.append(category)
+
+    return transformed_categories
 
 
 
@@ -132,20 +167,20 @@ def compile_restaurant_data(store_header, mx_info, store_opening_hours, menu_gro
             'menu_id': 18344,
             'titleURL': '',
             'title_id': '',
-            'title': store_header.get('name'),
-            'ImageURL': store_header.get('businessHeaderImgUrl'),
-            'LogoURL': store_header.get('coverSquareImgUrl'),
+            'title': store_header.get('name', ''),
+            'ImageURL': store_header.get('businessHeaderImgUrl', ''),
+            'LogoURL': store_header.get('coverSquareImgUrl', ''),
             'restaurantAddress': {
-                '@type': mx_info.get('address', {}).get('__typename'),
-                'streetAddress': mx_info.get('address', {}).get('street'),
-                'addressLocality': mx_info.get('address', {}).get('city'),
-                'addressRegion': mx_info.get('address', {}).get('state'),
+                '@type': mx_info.get('address', {}).get('__typename', ''),
+                'streetAddress': mx_info.get('address', {}).get('street', ''),
+                'addressLocality': mx_info.get('address', {}).get('city', ''),
+                'addressRegion': mx_info.get('address', {}).get('state', ''),
                 'postalCode': postal_code,
-                'addressCountry': mx_info.get('address', {}).get('countryShortname'),
+                'addressCountry': mx_info.get('address', {}).get('countryShortname', ''),
             },
             'storeOpeningHours': store_opening_hours,
-            'priceRange': store_header.get('priceRangeDisplayString'),
-            'telephone': mx_info.get('phoneno'),
+            'priceRange': store_header.get('priceRangeDisplayString', ''),
+            'telephone': mx_info.get('phoneno', ''),
             'ratingValue': '',
             'ratingCount': '',
             'latitude': float(store_header.get('address', {}).get('lat', 0.0)),
@@ -217,7 +252,6 @@ def save_json_to_file(data, filename='restaurant_detail.json'):
         json.dump(data, outfile, indent=4)
 
 
-
 def click_item(driver, item):
     """Click the item and handle the item modal."""
     global all_items_details, clicked_items  # Declare global variables before use
@@ -261,27 +295,61 @@ def click_item(driver, item):
                     select_value = 0
 
                 options = []
-                option_elements = detail.find_elements(By.CSS_SELECTOR, 'label')
+
+                # Check for element type 1 specific structure
+                option_elements = detail.find_elements(By.CSS_SELECTOR, 'div.sc-724a33a-8')
+                if not option_elements:
+                    # Fallback to the original option_elements selector
+                    option_elements = detail.find_elements(By.CSS_SELECTOR, 'label')
+
                 logging.info(f"option_elements: {option_elements}")
                 for option in option_elements:
-                    option_name = option.find_element(By.CSS_SELECTOR, 'span.Text-sc-1nm69d8-0').text
+                    # For element type 1
+                    if 'sc-724a33a-8' in option.get_attribute('class'):
+                        option_name = option.find_element(By.CSS_SELECTOR, 'span.Text-sc-1nm69d8-0.ZNLaC').text
+                        # Filter out calorie-only elements and extract only price elements
+                        price_elements = [elem for elem in
+                                          option.find_elements(By.CSS_SELECTOR, 'span.Text-sc-1nm69d8-0.dCneXH')
+                                          if '+' in elem.text]  # This will include only price elements
+                    else:
+                        # For element type 2 and 3
+                        option_name = option.find_element(By.CSS_SELECTOR, 'span.Text-sc-1nm69d8-0').text
+                        price_elements = [elem for elem in
+                                          option.find_elements(By.CSS_SELECTOR, 'span.Text-sc-1nm69d8-0.dCneXH')
+                                          if '+' in elem.text]
+
                     logging.info(f"option_name: {option_name}")
-                    price_elements = option.find_elements(By.CSS_SELECTOR, 'span.Text-sc-1nm69d8-0.dCneXH')
                     logging.info(f"price_elements: {price_elements}")
+
                     if price_elements:
                         raw_price = price_elements[0].text
-                        # Remove 'US', '+', and '$', then strip any extra spaces
-                        cleaned_price = float(raw_price.replace('US', '').replace('+', '').replace('$', '').strip())
+                        # Remove unwanted characters and any additional text
+                        raw_price = raw_price.replace('US', '').replace('+', '').replace('$', '').strip()
+
+                        try:
+                            # Attempt to convert to float
+                            cleaned_price = float(raw_price)
+                        except ValueError:
+                            # Handle cases where conversion to float fails
+                            cleaned_price = 0
                     else:
-                        cleaned_price = 0
+                        # Handle cases where price_elements was not used or found
+                        logging.info(f"No price found for {option_name}. Setting default price.")
+                        cleaned_price = 0  # Or you can set a default value like 0 or 0.0
+
+                    # Multiply cleaned price by 2
                     price = cleaned_price * 2
+
+                    # Define possibleToAdd value based on element type
+                    possible_to_add = 999999 if 'sc-724a33a-8' in option.get_attribute('class') else 1
 
                     options.append({
                         'name': option_name,
-                        'possibleToAdd': 1,
+                        'possibleToAdd': possible_to_add,
                         'price': price,
                         'leftHalfPrice': cleaned_price,
-                        'rightHalfPrice': cleaned_price
+                        'rightHalfPrice': cleaned_price,
+                        'ingredientsGroup': []
                     })
 
                 details.append({
@@ -313,9 +381,6 @@ def click_item(driver, item):
             logging.info("Item modal closed")
             time.sleep(5)
 
-            # Scroll down to load more items after clicking the item
-#            driver.execute_script("window.scrollBy(0, 100);")
-#            time.sleep(2)
             # Update the global menu with the item details
             global restaurant_detail
             if restaurant_detail:
@@ -326,6 +391,7 @@ def click_item(driver, item):
     except Exception as e:
         logging.error(f"Error interacting with item: {e}")
         time.sleep(2)
+
 
 
 def append_item_details_to_menu(menu, item_details):
@@ -357,7 +423,7 @@ def main():
     driver = Driver(uc=True, undetectable=True)
     driver.set_window_size(1024, 1024)  # Example for an iPad in portrait mode
 
-    url = "https://www.doordash.com/store/samara-pizza-syracuse-843307/?event_type=autocomplete&pickup=false"
+    url = "https://www.doordash.com/en-CA/store/blue-line-pizza-mountain-view-45/?utm_campaign=gpa"
     driver.get(url)
     time.sleep(50)  # Adjust the sleep time based on how long the page takes to load
 
@@ -370,9 +436,9 @@ def main():
     # Scroll and fetch items
     driver.execute_script("window.scrollBy(0, 2000);")
     time.sleep(10)
-    tabs_xpath = '//div[@data-testid="MenuNavCategories"]//button[@aria-label]'
-    WebDriverWait(driver, 60).until(EC.presence_of_all_elements_located((By.XPATH, tabs_xpath)))
-    tabs = driver.find_elements(By.XPATH, tabs_xpath)
+#    tabs_xpath = '//div[@data-testid="MenuNavCategories"]//button[@aria-label]'
+#    WebDriverWait(driver, 60).until(EC.presence_of_all_elements_located((By.XPATH, tabs_xpath)))
+#    tabs = driver.find_elements(By.XPATH, tabs_xpath)
 
     # Fetch all items initially
     items_xpath = '//div[@data-testid="MenuItem"]'
@@ -423,4 +489,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
